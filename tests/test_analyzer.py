@@ -140,6 +140,20 @@ def test_analyze_file_returns_none_after_3_failures(tmp_path):
     assert result is None
     assert mock_adapter.run.call_count == 3
 
+def test_analyze_file_returns_none_immediately_on_non_json_error(tmp_path):
+    """Non-JSON errors (e.g. RLMError) should abort immediately, not retry."""
+    from pseudocodify.rlm_adapter import RLMError
+    src = tmp_path / "app.py"
+    src.write_text("x = 1")
+
+    mock_adapter = MagicMock()
+    mock_adapter.run.side_effect = RLMError("network failure")
+
+    result = analyze_file(src, source_root=tmp_path, adapter=mock_adapter)
+    assert result is None
+    assert mock_adapter.run.call_count == 1  # no retries for non-JSON errors
+
+
 def test_build_extraction_prompt_contains_schema():
     prompt = build_extraction_prompt("def f(): pass", language="Python")
     assert "Python" in prompt

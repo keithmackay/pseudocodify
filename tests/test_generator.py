@@ -210,3 +210,74 @@ def test_run_generation_consolidate(tmp_path):
     assert output_file.exists()
     content = output_file.read_text()
     assert "app.py" in content
+
+
+def test_run_generation_skips_unchanged_file(tmp_path, capsys):
+    """Files whose source hash matches the cached hash should not be re-generated."""
+    from pseudocodify.analyzer import hash_file
+    from pseudocodify.config import RunConfig
+
+    src = tmp_path / "app.py"
+    src.write_text("def main(): pass")
+    real_hash = hash_file(src)
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    pseudo_path = output_dir / "app.pseudo"
+    pseudo_path.write_text("CACHED CONTENT")
+
+    cache_dir = tmp_path / ".pseudocodify"
+    cache_dir.mkdir()
+    save_state(cache_dir, style="cormen")
+
+    fa = FileAnalysis(
+        path="app.py", language="Python", purpose="entry",
+        constructs=[], external_deps=[], internal_refs=[], source_hash=real_hash,
+    )
+    cm = CodebaseMap(
+        source_root=str(tmp_path), files={"app.py": fa},
+        dominant_paradigm="OOP", recommended_style="cormen",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
+    )
+    mock_adapter = MagicMock()
+    cfg = RunConfig(source=str(tmp_path), output=str(output_dir), style="cormen")
+    run_generation(cm=cm, cfg=cfg, adapter=mock_adapter, architecture_summary="x")
+
+    mock_adapter.run.assert_not_called()
+    assert pseudo_path.read_text() == "CACHED CONTENT"
+
+
+def test_run_generation_regenerates_changed_file(tmp_path, capsys):
+    """Files whose source hash differs from the cached hash must be re-generated."""
+    from pseudocodify.config import RunConfig
+
+    src = tmp_path / "app.py"
+    src.write_text("def main(): pass")
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    pseudo_path = output_dir / "app.pseudo"
+    pseudo_path.write_text("STALE CONTENT")
+
+    cache_dir = tmp_path / ".pseudocodify"
+    cache_dir.mkdir()
+    save_state(cache_dir, style="cormen")
+
+    fa = FileAnalysis(
+        path="app.py", language="Python", purpose="entry",
+        constructs=[], external_deps=[], internal_refs=[], source_hash="stale_hash",
+    )
+    cm = CodebaseMap(
+        source_root=str(tmp_path), files={"app.py": fa},
+        dominant_paradigm="OOP", recommended_style="cormen",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.run.return_value = "FUNCTION main()"
+    cfg = RunConfig(source=str(tmp_path), output=str(output_dir), style="cormen")
+    run_generation(cm=cm, cfg=cfg, adapter=mock_adapter, architecture_summary="x")
+
+    mock_adapter.run.assert_called_once()
+    assert pseudo_path.read_text() != "STALE CONTENT"

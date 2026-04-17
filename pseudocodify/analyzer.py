@@ -113,8 +113,11 @@ def analyze_file(
             data["path"] = rel_path
             data["source_hash"] = source_hash
             return FileAnalysis.model_validate(data)
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError:
             continue
+        except Exception as e:
+            print(f"WARNING: [ANALYSIS FAILED] {rel_path} — {e}", file=sys.stderr)
+            return None
     return None
 
 
