@@ -18,7 +18,6 @@ The primary users are developers comfortable with the terminal. The tool is buil
 pseudocodify ./my-project --output ./my-project-pseudo
 pseudocodify ./my-project --output single-file.pseudo.md --consolidate
 pseudocodify ./my-project --style cormen
-pseudocodify ./my-project --depth 2
 pseudocodify ./my-project --model claude-opus-4-6
 ```
 
@@ -30,16 +29,34 @@ pseudocodify ./my-project --model claude-opus-4-6
 | `--consolidate` | `false` | Merge all output into a single document |
 | `--style` | `auto` | Pseudocode style: `auto`, `cormen`, `structured-english`, `pascal` |
 | `--model` | `claude-opus-4-6` | LLM model to use |
-| `--depth` | unlimited | Max directory recursion depth |
-| `--include` | `*` | Glob patterns for files to include |
+| `--include` | recognized extensions | Glob patterns for files to include. Default: all files with recognized code extensions (`.py`, `.js`, `.ts`, `.go`, `.rb`, `.java`, `.cs`, `.cpp`, `.c`, `.rs`, `.php`, etc.). Binary files and non-text files are always skipped regardless of this flag. |
 | `--exclude` | none | Glob patterns for files to skip |
+| `--yes` | `false` | Skip interactive style confirmation (auto-accept recommendation) |
 | `--verbose` | `false` | Show analysis and generation progress |
 
-When `--style auto` (the default), pseudocodify analyzes the codebase structure and presents 2–3 style options with a recommendation before generating. The user confirms or overrides interactively.
+### `--style auto` Interactive Flow
+
+When `--style auto` (the default), pseudocodify presents a style recommendation after Phase 1 analysis:
+
+```
+Detected codebase paradigm: Object-Oriented (Python)
+Recommended pseudocode style: CLRS/Cormen
+
+Available styles:
+  [1] CLRS/Cormen          (recommended) — textbook algorithmic style
+  [2] Structured English                 — plain prose-code hybrid
+  [3] Pascal-like                        — BEGIN/END block style
+
+Select style [1]: _
+```
+
+- Input: `1`, `2`, or `3` (or Enter to accept recommendation)
+- Invalid input: re-prompts with the same menu
+- Non-TTY / `--yes` flag: automatically selects the recommendation and logs `Using recommended style: CLRS/Cormen`
 
 ### Configuration File
 
-Users may place a `.pseudocodify.toml` at the project root to set run defaults. CLI flags always take precedence.
+Users may place a `.pseudocodify.toml` at the project root to set run defaults. CLI flags always take precedence. If the file is malformed (invalid TOML), the tool exits with a clear error message and no processing occurs.
 
 ```toml
 [pseudocodify]
@@ -52,51 +69,140 @@ output = "./pseudocode"
 
 ---
 
+## Data Models (`models.py`)
+
+All inter-phase data is structured using these models (Pydantic v2).
+
+```python
+class ExternalDep:
+    name: str               # import/package name
+    description: str        # plain-English description of what it does
+    known: bool             # True if the LLM recognized it as a well-known library
+
+class ConstructRef:
+    name: str               # function/class/variable name
+    file: str               # relative path to source file
+    kind: str               # "function" | "class" | "variable" | "method"
+
+class FileAnalysis:
+    path: str               # relative path from source root
+    language: str           # detected language (e.g., "Python", "TypeScript")
+    purpose: str            # one-line LLM-generated summary of the file's purpose
+    constructs: list[ConstructRef]        # all top-level and nested constructs
+    external_deps: list[ExternalDep]      # all external imports
+    internal_refs: list[tuple[str, str]]  # (caller_construct_name, callee_file_path)
+    source_hash: str        # SHA-256 of file contents at analysis time
+
+class CodebaseMap:
+    source_root: str                        # absolute path to source directory
+    files: dict[str, FileAnalysis]          # keyed by relative file path
+    dominant_paradigm: str                  # "OOP" | "functional" | "procedural" | "mixed"
+    recommended_style: str                  # "cormen" | "structured-english" | "pascal"
+    analysis_timestamp: str                 # ISO 8601
+```
+
+The `CodebaseMap` is serialized to `.pseudocodify/analysis.json` after Phase 1.
+
+---
+
 ## Architecture: Two-Phase LLM Pipeline
 
 ### Phase 1 — Codebase Analysis
 
-Before generating pseudocode, pseudocodify builds a **codebase map**: a structured JSON artifact capturing all constructs, relationships, and dependencies across the codebase.
-
 **Steps:**
-1. **File discovery** — walks the source tree, identifies all code files, groups by detected language (extension + content heuristics)
-2. **Structure extraction** — for each file, the LLM identifies: classes, functions/methods, control flow patterns, data structures, external dependencies (imports/requires), and cross-file references
-3. **Cross-file relationship mapping** — builds a call graph and dependency graph across the whole codebase
-4. **External dependency classification** — for each external import, the LLM determines if it's a well-known library and generates a plain-English description; unknown dependencies are flagged
-5. **Style recommendation** — based on the codebase's dominant paradigm (OOP, functional, procedural, mixed), pseudocodify recommends a pseudocode style and presents options to the user
+1. **File discovery** — walks the source tree, collects all files matching `--include` and not matching `--exclude`. Language is detected via file extension (`.py` → Python, `.ts`/`.js` → TypeScript/JavaScript, etc.) with LLM fallback for ambiguous cases.
+2. **Structure extraction** — for each file, the LLM is called with a structured extraction prompt (see below). Output must be valid JSON matching the `FileAnalysis` schema. If the LLM returns invalid JSON, up to 3 retries are attempted before the file is flagged `[ANALYSIS FAILED]`.
+3. **Cross-file relationship mapping** — `internal_refs` across all `FileAnalysis` objects are aggregated into a call graph stored on the `CodebaseMap`.
+4. **Style recommendation** — based on `dominant_paradigm`, the tool selects a default style and presents the interactive style menu (unless `--style` is explicitly set or `--yes` is passed).
 
-**RLM integration:** For large codebases that exceed LLM context limits, Phase 1 uses the `rlms` package (Recursive Language Models) to recursively decompose analysis work. The LLM spawns sub-calls to analyze individual files or modules, then aggregates results bottom-up into the full codebase map. This is transparent to the user.
+**Structure extraction prompt contract:**
 
-**Artifact:** The codebase map is persisted as `.pseudocodify/analysis.json`. If it already exists and source files are unchanged (verified via hash), Phase 1 is skipped on subsequent runs.
+The LLM is instructed to return a JSON object matching `FileAnalysis` (minus `source_hash`, which is computed locally). The system prompt specifies:
+- Language of the file (pre-detected)
+- Required output schema (injected as JSON Schema)
+- Instructions to identify all constructs, imports, and cross-file references
+- For external deps: classify as known/unknown and provide a one-sentence description
+
+If a file is too large to process in one call (estimated by token count), it is chunked by top-level construct boundaries. Each chunk is analyzed separately and results are merged into a single `FileAnalysis`.
+
+**RLM integration:** For codebases with many files that together exceed practical sequential processing limits, Phase 1 uses the `rlms` PyPI package (`pip install rlms`, `from rlm import RLM`). The RLM is configured with the Anthropic backend. Each file analysis is issued as an RLM sub-call; the root call aggregates results into the `CodebaseMap`. This is transparent to the user — they see per-file progress output.
+
+**Artifact:** Results are saved to `.pseudocodify/analysis.json`. On subsequent runs, each file's `source_hash` is compared to the current file hash. If unchanged, the existing `FileAnalysis` is reused. If any file has changed, only that file is re-analyzed; the `CodebaseMap` is then rebuilt from the mix of cached and fresh results.
 
 ---
 
 ### Phase 2 — Pseudocode Generation
 
-With the codebase map available as context, Phase 2 generates pseudocode output file-by-file.
-
 **Steps:**
-1. **File-by-file generation** — each source file is translated independently, with the full codebase map injected as context to ensure cross-file references are coherent
-2. **Structure-to-pseudocode mapping** — each identified construct is mapped to the chosen style using a style-specific system prompt
-3. **External dependency handling** — calls to external/3rd-party functions are rendered with a `[EXTERNAL: library-name]` flag and inline plain-English description
-4. **Output formatting** — each pseudocode file includes a header (source path, detected language, one-line purpose summary); functions and classes are separated by clear dividers
-5. **Consolidation** — if `--consolidate` is set, all generated files are merged into one document organized by directory structure
+1. **File-by-file generation** — each source file is translated using its `FileAnalysis` plus the full `CodebaseMap` (serialized and injected as context) to ensure cross-file references are coherent.
+2. **Construct-to-pseudocode mapping** — the style module for the selected style provides a system prompt template. The LLM returns pseudocode as a plain text string. No JSON parsing is required at this step.
+3. **External dependency rendering** — the generator substitutes each external call site with the pseudocode form followed by `// [EXTERNAL: <name>] <description>`.
+4. **Output writing** — each `.pseudo` file is written with a standard header (see Output Format).
+5. **Consolidation** — if `--consolidate`, files are concatenated in directory-traversal order with section headers.
 
-**RLM integration:** For very large individual files, RLM is used within generation too — the file is chunked by function/class boundaries, each chunk translated, then reassembled in order.
+**Incremental runs:** A file's pseudocode output is only regenerated if its `source_hash` has changed since the last run, or if the selected style has changed. Style selection is stored in `.pseudocodify/state.json` with the schema:
 
-**Incremental runs:** Only files whose source hashes have changed since the last run are regenerated.
+```json
+{ "last_style": "cormen" }
+```
+
+Where `last_style` is one of `"cormen"`, `"structured-english"`, or `"pascal"`. If `.pseudocodify/state.json` does not exist or `last_style` differs from the current run's style, all files are regenerated regardless of hash.
+
+**RLM integration:** For individual files where the source exceeds ~3,000 tokens, the file is split at function/class boundaries before generation. Each chunk is generated as a separate RLM sub-call; results are reassembled in source order.
 
 ---
 
-## Pseudocode Styles
+## RLM Adapter (`rlm_adapter.py`)
 
-| Style | Best For |
-|-------|----------|
-| **CLRS/Cormen** | Algorithmic, CS-heavy codebases |
-| **Structured English** | Business logic, CRUD, workflow-heavy codebases |
-| **Pascal-like** | Procedural codebases; teams from older language backgrounds |
+`rlm_adapter.py` is a thin wrapper around the `rlms` package that provides a consistent interface for both Phase 1 (analysis) and Phase 2 (generation). It abstracts RLM initialization and sub-call dispatch so that `analyzer.py` and `generator.py` do not import `rlms` directly.
 
-When `--style auto`, the tool recommends a style based on the dominant paradigm detected in Phase 1, presents the options, and waits for user confirmation.
+**Public interface:**
+
+```python
+class RLMAdapter:
+    def __init__(self, model: str):
+        """Initialize the RLM client with the given model name using the Anthropic backend."""
+
+    def run(self, prompt: str, context: str | None = None) -> str:
+        """
+        Execute a single RLM completion. The RLM may issue recursive sub-calls internally.
+        Returns the final text response as a string.
+        `context` is optional additional context injected before the prompt.
+        Raises RLMError on unrecoverable failure.
+        """
+```
+
+**Behavior:**
+- Retry/timeout behavior is delegated to the `rlms` library internals — the adapter does not add its own retry layer
+- Progress output (from `rlms` verbose mode) is forwarded to stdout when `--verbose` is set
+- `RLMError` is a pseudocodify-defined exception wrapping any exception raised by the `rlms` library, so callers never import `rlms` exceptions directly
+
+---
+
+## Style Modules (`styles/`)
+
+Each style module exports:
+- `SYSTEM_PROMPT: str` — injected as the LLM system prompt for all generation calls when this style is active. Describes the notation rules (keyword set, block delimiters, assignment syntax, comment format).
+- `STYLE_NAME: str` — display name (e.g., `"CLRS/Cormen"`)
+- `PARADIGM_FIT: list[str]` — list of `dominant_paradigm` values this style is recommended for. Valid values must match those on `CodebaseMap.dominant_paradigm`: `"OOP"`, `"functional"`, `"procedural"`, `"mixed"`. Example: `["OOP", "functional"]`.
+
+**Cormen style example rules (in `SYSTEM_PROMPT`):**
+- Assignment: `x ← value`
+- Blocks: indentation only (no delimiters)
+- Keywords: `if`, `else`, `for`, `while`, `return`, `and`, `or`, `not`
+- Constants: SMALL-CAPS
+- Procedures: `FUNCTION name(params)`
+
+**Structured English example rules:**
+- Plain prose with light code structure
+- Assignment: `set x to value`
+- Blocks: indented under `if ... then:` / `for each ... do:`
+- No formal keyword set — readability over formality
+
+**Pascal-like example rules:**
+- `PROCEDURE` / `FUNCTION` declarations
+- `BEGIN` / `END` block delimiters
+- Assignment: `:=`
 
 ---
 
@@ -110,31 +216,80 @@ pseudocode/
       user.pseudo
     services/
       auth.pseudo
-  README.pseudo.md     ← index + high-level architecture summary
+  README.pseudo.md
 ```
 
-### Sample `.pseudo` file
+### `.pseudo` file structure
+
+Every `.pseudo` file follows this structure:
+
 ```
-// SOURCE: src/models/user.py | LANGUAGE: Python | PURPOSE: User data model
+// SOURCE: src/models/user.py
+// LANGUAGE: Python
+// PURPOSE: Defines the User data model and related factory methods
+// ─────────────────────────────────────────────────────────────────
 
 CLASS User
   ATTRIBUTES: id, email, password_hash, created_at
 
   FUNCTION create(email, password)
-    hash ← hash_password(password)   // [EXTERNAL: bcrypt] hashes password using bcrypt
-    RETURN new User(email, hash)
+    hash ← hash_password(password)   // [EXTERNAL: bcrypt] hashes a plaintext password using bcrypt
+    RETURN new User with email=email, password_hash=hash, created_at=now()
+
+  FUNCTION to_dict()
+    RETURN { "id": id, "email": email, "created_at": created_at }
+
+// ─────────────────────────────────────────────────────────────────
+// [TRANSLATION INCOMPLETE: auth.pseudo — LLM returned malformed output after 3 retries]
 ```
 
-A `README.pseudo.md` is always generated at the output root. It provides a plain-English summary of the overall codebase architecture and an index of all pseudocode files.
+**Format rules:**
+- Header block: 3-line comment (SOURCE, LANGUAGE, PURPOSE) followed by a `─` divider line
+- Each top-level construct (class, function, file-level code) is separated by a blank line
+- File-level (non-class) code is rendered under a `// --- File-level code ---` comment
+- Nested classes are indented one additional level with their own `CLASS` header
+- Multi-return is expressed as `RETURN (value1, value2)`
+- Source comments are preserved as `// <original comment text>` inline
+- The `[TRANSLATION INCOMPLETE]` marker is appended at the bottom of the file for any failed chunk
+
+### `README.pseudo.md`
+
+Always generated at the output root. Contains:
+
+```markdown
+# Pseudocode Index — <source directory name>
+Generated: <ISO 8601 timestamp>
+Style: <style name>
+
+## Architecture Summary
+<LLM-generated 100-200 word plain-English description of the codebase's overall structure,
+dominant paradigm, and main components — generated during Phase 1>
+
+## File Index
+- [src/models/user.pseudo](src/models/user.pseudo) — User data model and factory methods
+- [src/services/auth.pseudo](src/services/auth.pseudo) — Authentication and session management
+...
+```
+
+The index is a flat list sorted by directory traversal order. Each entry links to the `.pseudo` file and includes the file's `purpose` field from its `FileAnalysis`.
 
 ---
 
 ## Error Handling
 
-- Files that fail to parse or translate are skipped with a warning; processing continues
-- Malformed or incomplete LLM output triggers up to 3 retries; if all fail, the file is flagged `[TRANSLATION INCOMPLETE]`
-- RLM sub-call failures are surfaced as warnings with the affected file path; remaining files continue
-- All warnings and errors are collected and printed as a summary at the end of each run
+| Scenario | Behavior |
+|----------|----------|
+| Malformed `.pseudocodify.toml` | Exit with error message before any processing |
+| Invalid `--style` value | Exit with error listing valid options |
+| Missing/invalid Anthropic API key | Exit with error before any LLM calls |
+| Output directory not writable | Exit with error before any processing |
+| File analysis fails after 3 retries | File flagged `[ANALYSIS FAILED]` in summary; processing continues |
+| LLM returns malformed pseudocode after 3 retries | File flagged `[TRANSLATION INCOMPLETE]`; marker appended to output file |
+| RLM sub-call failure | Warning logged with file path; remaining files continue |
+| Source file unreadable (permissions) | Warning logged; file skipped |
+| Invalid `--style auto` interactive input | Re-prompt until valid input received |
+
+All warnings and errors are collected and printed as a summary table at the end of each run. Exit code is `0` if at least one file was successfully translated; `1` if all files failed or a startup validation failed.
 
 ---
 
@@ -146,16 +301,23 @@ pseudocodify/
     cli.py              ← CLI entry point (Typer)
     analyzer.py         ← Phase 1: codebase analysis
     generator.py        ← Phase 2: pseudocode generation
-    rlm_adapter.py      ← RLM integration wrapper
+    rlm_adapter.py      ← RLM integration wrapper (wraps rlms package)
     styles/
-      cormen.py         ← style-specific prompt templates
+      cormen.py         ← CLRS/Cormen style prompts and rules
       structured_english.py
       pascal.py
-    models.py           ← shared data models (CodebaseMap, FileAnalysis, etc.)
+    models.py           ← Pydantic models (CodebaseMap, FileAnalysis, etc.)
   tests/
   docs/
   pyproject.toml
 ```
+
+**External dependencies:**
+- `typer` — CLI framework
+- `anthropic` — Anthropic Python SDK
+- `rlms` — Recursive Language Models package (PyPI: `rlms`)
+- `pydantic` v2 — data models and JSON serialization
+- `toml` / `tomllib` — config file parsing (stdlib in Python 3.11+)
 
 ---
 
