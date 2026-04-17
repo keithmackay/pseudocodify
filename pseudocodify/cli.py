@@ -1,9 +1,12 @@
+# ABOUTME: CLI for converting code to pseudocode with interactive style selection.
+# ABOUTME: Handles argument parsing, config loading, analysis, and generation phases.
+
 import os
 import sys
 from pathlib import Path
 import typer
-from pseudocodify.config import RunConfig, load_config
-from pseudocodify.styles import list_styles, get_style
+from pseudocodify.config import load_config
+from pseudocodify.styles import list_styles
 
 app = typer.Typer(help="Convert any codebase to pseudocode.")
 
@@ -89,7 +92,7 @@ def _prompt_style(recommended: str, paradigm: str, yes: bool) -> str:
     typer.echo("")
 
     keys = [s[0] for s in style_options]
-    default_idx = keys.index(recommended) + 1
+    default_idx = (keys.index(recommended) + 1) if recommended in keys else 1
 
     while True:
         raw = typer.prompt(f"Select style [{default_idx}]", default=str(default_idx))
