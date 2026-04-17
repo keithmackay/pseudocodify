@@ -177,7 +177,7 @@ def run_analysis(cfg: RunConfig, adapter: RLMAdapter) -> CodebaseMap:
         files=result_files,
         dominant_paradigm=paradigm,
         recommended_style=style,
-        analysis_timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+        analysis_timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
     )
     save_codebase_map(cm, cache_dir)
     return cm

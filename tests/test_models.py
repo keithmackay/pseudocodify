@@ -36,7 +36,7 @@ def test_codebase_map_dominant_paradigm_values():
             files={},
             dominant_paradigm=paradigm,
             recommended_style="cormen",
-            analysis_timestamp="2026-04-17T00:00:00Z",
+            analysis_timestamp="2026-04-17T00:00:00+00:00",
         )
         assert cm.dominant_paradigm == paradigm
 
@@ -49,6 +49,6 @@ def test_codebase_map_recommended_style_values():
             files={},
             dominant_paradigm="OOP",
             recommended_style=style,
-            analysis_timestamp="2026-04-17T00:00:00Z",
+            analysis_timestamp="2026-04-17T00:00:00+00:00",
         )
         assert cm.recommended_style == style

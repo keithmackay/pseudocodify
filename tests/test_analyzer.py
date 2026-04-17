@@ -67,7 +67,7 @@ def test_save_and_load_codebase_map(tmp_path):
         files={},
         dominant_paradigm="OOP",
         recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     save_codebase_map(cm, cache_dir)
     loaded = load_codebase_map(cache_dir)
@@ -88,7 +88,7 @@ def test_cached_hashes_are_reused(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={"src/main.py": fa},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     save_codebase_map(cm, cache_dir)
     loaded = load_codebase_map(cache_dir)
@@ -181,7 +181,7 @@ def test_run_analysis_skips_unchanged_files(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={"app.py": fa},
         dominant_paradigm="procedural", recommended_style="pascal",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     save_codebase_map(cm, cache_dir)
 

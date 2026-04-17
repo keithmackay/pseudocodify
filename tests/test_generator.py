@@ -39,7 +39,7 @@ def test_build_readme_index():
     cm = CodebaseMap(
         source_root="/tmp/src", files={"src/models/user.py": fa},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     readme = build_readme_index(cm, style_name="CLRS/Cormen", architecture_summary="A simple app.")
     assert "# Pseudocode Index" in readme
@@ -54,7 +54,7 @@ def test_build_readme_includes_timestamp():
     cm = CodebaseMap(
         source_root="/tmp/src", files={},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     readme = build_readme_index(cm, style_name="CLRS/Cormen", architecture_summary="x")
     assert "2026-04-17" in readme
@@ -76,7 +76,7 @@ def test_generate_file_pseudocode_writes_output(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={"src/app.py": fa},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
 
     mock_adapter = MagicMock()
@@ -109,7 +109,7 @@ def test_generate_file_pseudocode_retries_on_empty(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={},
         dominant_paradigm="procedural", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     mock_adapter = MagicMock()
     mock_adapter.run.side_effect = ["", "", "// file-level code\nx ← 1"]
@@ -133,7 +133,7 @@ def test_translation_incomplete_marker_on_failure(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={},
         dominant_paradigm="procedural", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     mock_adapter = MagicMock()
     mock_adapter.run.return_value = ""
@@ -173,7 +173,7 @@ def test_run_generation_creates_readme(tmp_path, capsys):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={"app.py": fa},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     mock_adapter = MagicMock()
     mock_adapter.run.return_value = "FUNCTION main()\n  // entry point"
@@ -197,7 +197,7 @@ def test_run_generation_consolidate(tmp_path):
     cm = CodebaseMap(
         source_root=str(tmp_path), files={"app.py": fa},
         dominant_paradigm="OOP", recommended_style="cormen",
-        analysis_timestamp="2026-04-17T00:00:00Z",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
     )
     mock_adapter = MagicMock()
     mock_adapter.run.return_value = "FUNCTION main()"

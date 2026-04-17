@@ -19,4 +19,4 @@ pseudocodify = "pseudocodify.cli:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-testPathIgnorePatterns = [".worktrees/"]
+norecursedirs = [".worktrees", "venv", ".git"]
