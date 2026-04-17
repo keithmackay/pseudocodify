@@ -1,0 +1,53 @@
+name: Bug Report
+description: Report something that isn't working correctly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Please fill out as much of this as you can. The more detail, the faster we can reproduce and fix it.
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: The exact pseudocodify command you ran
+      placeholder: "pseudocodify ./my-project --style cormen"
+    validations:
+      required: true
+
+  - type: input
+    id: source-language
+    attributes:
+      label: Source language(s)
+      description: What language(s) is the codebase you were translating?
+      placeholder: "Python, TypeScript, Go, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include any error messages or unexpected output.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, pseudocodify version, OS
+      placeholder: |
+        Python: 3.12.2
+        pseudocodify: 0.1.0
+        OS: macOS 15.4
+    validations:
+      required: true
