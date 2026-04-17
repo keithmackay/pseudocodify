@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pseudocodify"
+version = "0.1.0"
+description = "Convert any codebase to pseudocode"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "anthropic>=0.25",
+    "rlms>=0.1",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+pseudocodify = "pseudocodify.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".worktrees", "venv", ".git"]
