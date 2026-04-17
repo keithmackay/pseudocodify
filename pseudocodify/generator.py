@@ -7,6 +7,7 @@ import sys
 import types
 from pathlib import Path
 
+from pseudocodify.analyzer import hash_file
 from pseudocodify.config import RunConfig
 from pseudocodify.models import CodebaseMap, FileAnalysis
 from pseudocodify.rlm_adapter import RLMAdapter
@@ -130,7 +131,12 @@ def run_generation(
 
     for rel_path, fa in sorted(cm.files.items()):
         pseudo_path = pseudo_dir / (rel_path.rsplit(".", 1)[0] + ".pseudo")
-        if not style_changed and pseudo_path.exists():
+        source_path = source / rel_path
+        source_unchanged = (
+            source_path.exists()
+            and hash_file(source_path) == fa.source_hash
+        )
+        if not style_changed and pseudo_path.exists() and source_unchanged:
             if cfg.consolidate:
                 pseudo_contents.append(pseudo_path.read_text())
             continue
