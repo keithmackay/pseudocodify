@@ -8,11 +8,39 @@ The goal is for pseudocodify to serve as the hub for a universal language transl
 
 ## Installation
 
-_Placeholder_
+```bash
+pip install pseudocodify
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/keithmackay/pseudocodify
+cd pseudocodify
+pip install -e .
+```
+
+Requires Python 3.11+. Set your Anthropic API key:
+
+```bash
+export ANTHROPIC_API_KEY=your_key_here
+```
 
 ## Usage
 
-_Placeholder_
+```bash
+# Translate a codebase to pseudocode (per-file output)
+pseudocodify ./my-project --output ./my-project-pseudo
+
+# Single consolidated output file
+pseudocodify ./my-project --output all.pseudo.md --consolidate
+
+# Specific pseudocode style
+pseudocodify ./my-project --style cormen
+
+# Skip interactive style confirmation
+pseudocodify ./my-project --yes
+```
 
 ## License
 
