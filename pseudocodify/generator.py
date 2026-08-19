@@ -46,6 +46,23 @@ def build_readme_index(
     return "\n".join(lines) + "\n"
 
 
+def relevant_context(fa: FileAnalysis, cm: CodebaseMap) -> CodebaseMap:
+    callees = {path for _, path in fa.internal_refs}
+    callers = {
+        other_path for other_path, other_fa in cm.files.items()
+        if any(path == fa.path for _, path in other_fa.internal_refs)
+    }
+    relevant_paths = {fa.path} | callees | callers
+    files = {path: cm.files[path] for path in relevant_paths if path in cm.files}
+    return CodebaseMap(
+        source_root=cm.source_root,
+        files=files,
+        dominant_paradigm=cm.dominant_paradigm,
+        recommended_style=cm.recommended_style,
+        analysis_timestamp=cm.analysis_timestamp,
+    )
+
+
 def build_generation_prompt(
     source_code: str,
     fa: FileAnalysis,
