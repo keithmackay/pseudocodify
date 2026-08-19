@@ -129,6 +129,28 @@ def test_analyze_file_retries_on_invalid_json(tmp_path):
     assert result is not None
     assert mock_adapter.run.call_count == 3
 
+def test_analyze_file_retry_prompt_includes_parse_error(tmp_path):
+    src = tmp_path / "app.py"
+    src.write_text("x = 1")
+
+    valid_response = """{
+        "path": "app.py", "language": "Python", "purpose": "x assignment",
+        "constructs": [], "external_deps": [], "internal_refs": []
+    }"""
+    mock_adapter = MagicMock()
+    mock_adapter.run.side_effect = ["not json", valid_response]
+
+    result = analyze_file(src, source_root=tmp_path, adapter=mock_adapter)
+    assert result is not None
+
+    first_prompt = mock_adapter.run.call_args_list[0].args[0]
+    second_prompt = mock_adapter.run.call_args_list[1].args[0]
+    assert second_prompt != first_prompt
+    assert "not json" not in first_prompt
+    assert first_prompt in second_prompt  # original prompt preserved, error appended
+    assert "invalid" in second_prompt.lower() or "error" in second_prompt.lower()
+
+
 def test_analyze_file_returns_none_after_3_failures(tmp_path):
     src = tmp_path / "app.py"
     src.write_text("x = 1")

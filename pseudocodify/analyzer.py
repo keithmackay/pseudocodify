@@ -104,7 +104,8 @@ def analyze_file(
     source_code = path.read_text(errors="replace")
     language = _detect_language(path)
     source_hash = hash_file(path)
-    prompt = build_extraction_prompt(source_code, language)
+    base_prompt = build_extraction_prompt(source_code, language)
+    prompt = base_prompt
 
     for attempt in range(3):
         try:
@@ -113,7 +114,12 @@ def analyze_file(
             data["path"] = rel_path
             data["source_hash"] = source_hash
             return FileAnalysis.model_validate(data)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            prompt = (
+                f"{base_prompt}\n\n"
+                f"Your previous response was invalid JSON and raised this error: {e}\n"
+                f"Return ONLY a valid JSON object matching the schema — no explanation, no markdown, no code fences."
+            )
             continue
         except Exception as e:
             print(f"WARNING: [ANALYSIS FAILED] {rel_path} — {e}", file=sys.stderr)
