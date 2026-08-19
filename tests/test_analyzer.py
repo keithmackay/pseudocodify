@@ -7,9 +7,9 @@ from pseudocodify.analyzer import (
     discover_files, hash_file, RECOGNIZED_EXTENSIONS,
     save_codebase_map, load_codebase_map,
     analyze_file, build_extraction_prompt,
-    run_analysis,
+    run_analysis, _infer_paradigm,
 )
-from pseudocodify.models import CodebaseMap, FileAnalysis
+from pseudocodify.models import CodebaseMap, ConstructRef, FileAnalysis
 
 
 # --- Task 4.1: File discovery and hashing ---
@@ -181,6 +181,48 @@ def test_run_analysis_builds_codebase_map(tmp_path):
     cm = run_analysis(cfg, adapter=mock_adapter)
     assert "app.py" in cm.files
     assert cm.dominant_paradigm in ["OOP", "functional", "procedural", "mixed"]
+
+# --- Paradigm inference ---
+
+def _fa(constructs):
+    return FileAnalysis(
+        path="app.py", language="Python", purpose="p",
+        constructs=constructs, external_deps=[], internal_refs=[], source_hash="x",
+    )
+
+def test_infer_paradigm_functional_when_only_functions_no_variables():
+    files = {"app.py": _fa([
+        ConstructRef(name="f", file="app.py", kind="function"),
+        ConstructRef(name="g", file="app.py", kind="function"),
+    ])}
+    assert _infer_paradigm(files) == "functional"
+
+def test_infer_paradigm_procedural_when_functions_and_module_variables():
+    files = {"app.py": _fa([
+        ConstructRef(name="f", file="app.py", kind="function"),
+        ConstructRef(name="CONFIG", file="app.py", kind="variable"),
+    ])}
+    assert _infer_paradigm(files) == "procedural"
+
+def test_infer_paradigm_oop_when_more_classes_than_functions():
+    files = {"app.py": _fa([
+        ConstructRef(name="Foo", file="app.py", kind="class"),
+        ConstructRef(name="Bar", file="app.py", kind="class"),
+        ConstructRef(name="helper", file="app.py", kind="function"),
+    ])}
+    assert _infer_paradigm(files) == "OOP"
+
+def test_infer_paradigm_mixed_when_classes_and_functions_balanced():
+    files = {"app.py": _fa([
+        ConstructRef(name="Foo", file="app.py", kind="class"),
+        ConstructRef(name="helper", file="app.py", kind="function"),
+    ])}
+    assert _infer_paradigm(files) == "mixed"
+
+def test_infer_paradigm_procedural_when_no_constructs():
+    files = {"app.py": _fa([])}
+    assert _infer_paradigm(files) == "procedural"
+
 
 def test_run_analysis_skips_unchanged_files(tmp_path):
     src = tmp_path / "app.py"

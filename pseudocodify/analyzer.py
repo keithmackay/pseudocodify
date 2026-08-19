@@ -130,10 +130,14 @@ def _infer_paradigm(files: dict) -> str:
         1 for fa in files.values()
         for c in fa.constructs if c.kind == "function"
     )
+    variable_count = sum(
+        1 for fa in files.values()
+        for c in fa.constructs if c.kind == "variable"
+    )
     if class_count > func_count:
         return "OOP"
     if class_count == 0 and func_count > 0:
-        return "procedural"
+        return "functional" if variable_count == 0 else "procedural"
     if class_count > 0 and func_count > 0:
         return "mixed"
     return "procedural"
