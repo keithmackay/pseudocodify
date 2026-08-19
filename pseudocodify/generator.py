@@ -116,12 +116,13 @@ def run_generation(
 ) -> None:
     from pseudocodify.styles import get_style
 
-    style = get_style(cfg.style if cfg.style != "auto" else cm.recommended_style)
+    resolved_style_name = cfg.style if cfg.style != "auto" else cm.recommended_style
+    style = get_style(resolved_style_name)
     source = Path(cfg.source)
     cache_dir = source / ".pseudocodify"
 
     state = load_state(cache_dir)
-    style_changed = state.get("last_style") != (cfg.style if cfg.style != "auto" else cm.recommended_style)
+    style_changed = state.get("last_style") != resolved_style_name
 
     output = Path(cfg.output)
     # In consolidate mode, output is the destination file; stage individual pseudo files alongside it.
@@ -160,7 +161,7 @@ def run_generation(
         output.mkdir(parents=True, exist_ok=True)
         (output / "README.pseudo.md").write_text(readme_content)
 
-    save_state(cache_dir, style=cfg.style if cfg.style != "auto" else cm.recommended_style)
+    save_state(cache_dir, style=resolved_style_name)
 
     total = len(cm.files)
     n_failed = len(failed)
