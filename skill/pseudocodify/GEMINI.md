@@ -1,0 +1,1 @@
+@./skills/pseudocodify/SKILL.md

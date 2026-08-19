@@ -1,0 +1,6 @@
+{
+  "name": "pseudocodify",
+  "version": "1.0.0",
+  "description": "Convert a codebase into language-agnostic pseudocode using the pseudocodify CLI.",
+  "skills": "./skills/"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "pseudocodify",
+  "description": "Convert a codebase into language-agnostic pseudocode using the pseudocodify CLI.",
+  "version": "1.0.0",
+  "contextFileName": "GEMINI.md"
+}
