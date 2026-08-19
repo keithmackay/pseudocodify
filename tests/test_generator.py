@@ -32,6 +32,25 @@ def test_build_pseudo_header():
     assert "─" in header  # divider line
 
 
+def test_build_generation_prompt_scopes_context_to_relevant_files():
+    fa = FileAnalysis(
+        path="app.py", language="Python", purpose="entry point",
+        constructs=[], external_deps=[], internal_refs=[], source_hash="x",
+    )
+    unrelated = FileAnalysis(
+        path="unrelated.py", language="Python", purpose="totally unrelated file",
+        constructs=[], external_deps=[], internal_refs=[], source_hash="y",
+    )
+    cm = CodebaseMap(
+        source_root="/tmp/src", files={"app.py": fa, "unrelated.py": unrelated},
+        dominant_paradigm="procedural", recommended_style="pascal",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
+    )
+    prompt = build_generation_prompt("x = 1", fa, cm)
+    assert "totally unrelated file" not in prompt
+    assert "entry point" in prompt
+
+
 def test_build_generation_prompt_delimits_source_as_untrusted_data():
     from pseudocodify.analyzer import SOURCE_DELIMITER_START, SOURCE_DELIMITER_END
     fa = FileAnalysis(

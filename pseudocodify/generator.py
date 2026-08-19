@@ -68,7 +68,8 @@ def build_generation_prompt(
     fa: FileAnalysis,
     cm: CodebaseMap,
 ) -> str:
-    context = f"Codebase context (for cross-file references):\n{cm.model_dump_json(indent=2)}\n\n"
+    scoped_cm = relevant_context(fa, cm)
+    context = f"Codebase context (for cross-file references):\n{scoped_cm.model_dump_json(indent=2)}\n\n"
     return (
         f"{context}"
         f"Translate the following {fa.language} source file to pseudocode.\n"
