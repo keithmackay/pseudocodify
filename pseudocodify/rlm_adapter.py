@@ -1,3 +1,5 @@
+import os
+
 from rlm import RLM
 
 
@@ -9,7 +11,10 @@ class RLMAdapter:
     def __init__(self, model: str, verbose: bool = False):
         self._rlm = RLM(
             backend="anthropic",
-            backend_kwargs={"model_name": model},
+            backend_kwargs={
+                "model_name": model,
+                "api_key": os.environ.get("ANTHROPIC_API_KEY"),
+            },
             verbose=verbose,
         )
 

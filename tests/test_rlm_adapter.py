@@ -43,3 +43,14 @@ def test_rlm_exception_wrapped_as_rlm_error():
 def test_rlm_error_is_not_base_exception():
     assert issubclass(RLMError, Exception)
     assert not issubclass(RLMError, BaseException) or issubclass(RLMError, Exception)
+
+
+def test_backend_kwargs_includes_api_key_from_environment(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-api-key-123")
+    mock_rlm_class = MagicMock()
+
+    with patch("pseudocodify.rlm_adapter.RLM", mock_rlm_class):
+        RLMAdapter(model="claude-opus-4-6")
+
+    _, kwargs = mock_rlm_class.call_args
+    assert kwargs["backend_kwargs"]["api_key"] == "test-api-key-123"
