@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import types
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from pseudocodify.analyzer import hash_file, SOURCE_DELIMITER_START, SOURCE_DELIMITER_END
@@ -13,6 +14,7 @@ from pseudocodify.models import CodebaseMap, FileAnalysis
 from pseudocodify.rlm_adapter import RLMAdapter
 
 DIVIDER = "// " + "─" * 65
+MAX_WORKERS = 8
 
 
 def build_pseudo_header(source_path: str, language: str, purpose: str) -> str:
@@ -148,7 +150,8 @@ def run_generation(
     # In consolidate mode, output is the destination file; stage individual pseudo files alongside it.
     pseudo_dir = output.parent if cfg.consolidate else output
     failed: list[str] = []
-    pseudo_contents: list[str] = []
+    succeeded: set[str] = set()
+    to_generate: list[tuple[str, FileAnalysis]] = []
 
     for rel_path, fa in sorted(cm.files.items()):
         pseudo_path = pseudo_dir / (rel_path.rsplit(".", 1)[0] + ".pseudo")
@@ -158,19 +161,37 @@ def run_generation(
             and hash_file(source_path) == fa.source_hash
         )
         if not style_changed and pseudo_path.exists() and source_unchanged:
-            if cfg.consolidate:
-                pseudo_contents.append(pseudo_path.read_text())
+            succeeded.add(rel_path)
             continue
+        to_generate.append((rel_path, fa))
 
-        success = generate_file_pseudocode(
-            fa=fa, cm=cm, source_root=source,
-            output_dir=pseudo_dir, style=style, adapter=adapter,
-        )
-        if not success:
-            failed.append(rel_path)
-            print(f"WARNING: [TRANSLATION INCOMPLETE] {rel_path}", file=sys.stderr)
-        elif cfg.consolidate:
-            pseudo_contents.append(pseudo_path.read_text())
+    if to_generate:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_rel = {
+                executor.submit(
+                    generate_file_pseudocode,
+                    fa=fa, cm=cm, source_root=source,
+                    output_dir=pseudo_dir, style=style, adapter=adapter,
+                ): rel_path
+                for rel_path, fa in to_generate
+            }
+            for future in as_completed(future_to_rel):
+                rel_path = future_to_rel[future]
+                success = future.result()
+                if success:
+                    succeeded.add(rel_path)
+                else:
+                    failed.append(rel_path)
+
+    for rel_path in sorted(failed):
+        print(f"WARNING: [TRANSLATION INCOMPLETE] {rel_path}", file=sys.stderr)
+
+    pseudo_contents: list[str] = []
+    if cfg.consolidate:
+        for rel_path in sorted(cm.files):
+            if rel_path in succeeded:
+                pseudo_path = pseudo_dir / (rel_path.rsplit(".", 1)[0] + ".pseudo")
+                pseudo_contents.append(pseudo_path.read_text())
 
     readme_content = build_readme_index(cm, style.STYLE_NAME, architecture_summary)
 

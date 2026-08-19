@@ -300,6 +300,32 @@ def test_run_generation_consolidate(tmp_path):
     assert "app.py" in content
 
 
+def test_run_generation_consolidate_preserves_sorted_order_under_concurrency(tmp_path):
+    files = {}
+    for name in ["c.py", "a.py", "b.py"]:
+        (tmp_path / name).write_text(f"# {name}")
+        files[name] = FileAnalysis(
+            path=name, language="Python", purpose=f"purpose {name}",
+            constructs=[], external_deps=[], internal_refs=[], source_hash="x",
+        )
+    cm = CodebaseMap(
+        source_root=str(tmp_path), files=files,
+        dominant_paradigm="OOP", recommended_style="cormen",
+        analysis_timestamp="2026-04-17T00:00:00+00:00",
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.run.return_value = "FUNCTION whatever()"
+
+    from pseudocodify.config import RunConfig
+    output_file = tmp_path / "all.pseudo.md"
+    cfg = RunConfig(source=str(tmp_path), output=str(output_file), consolidate=True)
+    run_generation(cm=cm, cfg=cfg, adapter=mock_adapter, architecture_summary="x")
+
+    content = output_file.read_text()
+    positions = {name: content.index(f"// SOURCE: {name}") for name in files}
+    assert positions["a.py"] < positions["b.py"] < positions["c.py"]
+
+
 def test_run_generation_skips_unchanged_file(tmp_path, capsys):
     """Files whose source hash matches the cached hash should not be re-generated."""
     from pseudocodify.analyzer import hash_file
