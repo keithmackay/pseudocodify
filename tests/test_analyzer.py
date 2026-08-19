@@ -257,6 +257,29 @@ def test_infer_paradigm_procedural_when_no_constructs():
     assert _infer_paradigm(files) == "procedural"
 
 
+def test_run_analysis_processes_multiple_uncached_files_concurrently(tmp_path):
+    (tmp_path / "one.py").write_text("def one(): pass")
+    (tmp_path / "two.py").write_text("def two(): pass")
+    (tmp_path / "three.py").write_text("def three(): pass")
+    (tmp_path / ".pseudocodify").mkdir()
+
+    valid_response = json.dumps({
+        "path": "placeholder.py", "language": "Python", "purpose": "a function",
+        "constructs": [], "external_deps": [], "internal_refs": [],
+    })
+    mock_adapter = MagicMock()
+    mock_adapter.run.return_value = valid_response
+
+    from pseudocodify.config import RunConfig
+    cfg = RunConfig(source=str(tmp_path))
+    cm = run_analysis(cfg, adapter=mock_adapter)
+
+    assert set(cm.files.keys()) == {"one.py", "two.py", "three.py"}
+    assert mock_adapter.run.call_count == 3
+    for rel, fa in cm.files.items():
+        assert fa.path == rel  # each result correctly attributed to its own file
+
+
 def test_run_analysis_skips_unchanged_files(tmp_path):
     src = tmp_path / "app.py"
     src.write_text("x = 1")

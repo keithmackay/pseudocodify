@@ -3,11 +3,14 @@ import fnmatch
 import hashlib
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from pseudocodify.config import RunConfig
 from pseudocodify.models import CodebaseMap, FileAnalysis
 from pseudocodify.rlm_adapter import RLMAdapter
+
+MAX_WORKERS = 8
 
 RECOGNIZED_EXTENSIONS = {
     ".py", ".js", ".ts", ".go", ".rb", ".java", ".cs",
@@ -173,21 +176,32 @@ def run_analysis(cfg: RunConfig, adapter: RLMAdapter) -> CodebaseMap:
 
     result_files: dict[str, FileAnalysis] = {}
     failed: list[str] = []
+    to_analyze: list[tuple[str, Path]] = []
 
     for file_path in files:
         rel = str(file_path.relative_to(source))
         current_hash = hash_file(file_path)
         if cached and rel in cached.files and cached.files[rel].source_hash == current_hash:
             result_files[rel] = cached.files[rel]
-            continue
-        fa = analyze_file(file_path, source_root=source, adapter=adapter)
-        if fa is None:
-            failed.append(rel)
         else:
-            result_files[rel] = fa
+            to_analyze.append((rel, file_path))
+
+    if to_analyze:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_rel = {
+                executor.submit(analyze_file, file_path, source, adapter): rel
+                for rel, file_path in to_analyze
+            }
+            for future in as_completed(future_to_rel):
+                rel = future_to_rel[future]
+                fa = future.result()
+                if fa is None:
+                    failed.append(rel)
+                else:
+                    result_files[rel] = fa
 
     if failed:
-        for f in failed:
+        for f in sorted(failed):
             print(f"WARNING: [ANALYSIS FAILED] {f}", file=sys.stderr)
 
     paradigm = _infer_paradigm(result_files)
