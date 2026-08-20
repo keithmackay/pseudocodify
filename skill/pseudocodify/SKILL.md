@@ -19,6 +19,12 @@ Convert any codebase into human-readable, language-agnostic pseudocode using the
 - The user wants to document unfamiliar code without reading every file
 - The user explicitly asks to "pseudocodify" a directory or project
 
+## Flags
+
+### `--help`
+
+If the user invokes this skill with a `--help` flag (e.g. `/pseudocodify --help`), do not run the conversion. Instead, read and display the contents of `help.md` (in this skill's folder) verbatim, then stop. (This is distinct from the underlying `pseudocodify` CLI's own `--help`, which is documented in the Usage section below.)
+
 ## Prerequisites
 
 1. `pseudocodify` must be installed and on `PATH`. Check with `pseudocodify --help`. If missing, install it:
