@@ -95,6 +95,10 @@ pytest tests/ -v
 
 Contributions are welcome. Fork the repo, create a branch, and open a pull request. Please ensure all tests pass before submitting.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 [MIT](LICENSE)
