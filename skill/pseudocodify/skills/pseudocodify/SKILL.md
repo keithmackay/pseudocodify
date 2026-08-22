@@ -44,6 +44,28 @@ If the user invokes this skill with a `--version` flag (e.g. `/pseudocodify --ve
 
 Note: this version is the **skill's** own version (from its manifest), not the underlying `pseudocodify` CLI's version — check that separately with `pseudocodify --version`.
 
+### `--dry-run`
+
+If the user invokes this skill with a `--dry-run` flag (e.g. `/pseudocodify --dry-run` or `/pseudocodify <source> --dry-run`), run through the normal Prerequisites and Usage steps below to work out what a real run would do, but stop before invoking the `pseudocodify` CLI for real — no `.pseudo` files are created or overwritten.
+
+Concretely, in dry-run mode:
+
+1. Run Prerequisites checks 1 and 2 as normal (they're read-only) — if either fails, stop and report it exactly as a normal run would.
+2. Resolve **source**, **output**, **style**, and **include/exclude** exactly as in Usage (asking the user or inferring from context), but do not execute `pseudocodify` itself.
+3. Determine which source files would be processed under those include/exclude patterns and the target output path.
+4. For each candidate output file, check whether it already exists on disk — this distinguishes files that would be **created** from files that would be **overwritten**.
+5. Report a list, e.g.:
+   ```
+   Would create:
+     ./pseudocode/src/models.py.pseudo
+     ./pseudocode/src/utils.py.pseudo
+   Would overwrite:
+     ./pseudocode/src/cli.py.pseudo
+   ```
+   (or, under `--consolidate`, report the single consolidated output path as would-create or would-overwrite, plus the list of source files that would feed into it.)
+6. Note incremental skips: under normal (non-dry-run) operation, unchanged files are skipped on re-runs via SHA-256 hashing — if an existing output file's source hasn't changed since it was last generated, call this out as "would skip (unchanged)" rather than counting it as an overwrite.
+7. Stop — do not run the CLI, write any file, or take any other action.
+
 ## Prerequisites
 
 1. `pseudocodify` must be installed and on `PATH`. Check with `pseudocodify --help`. If missing, install it:

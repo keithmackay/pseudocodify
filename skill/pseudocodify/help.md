@@ -26,6 +26,8 @@ USAGE
 
 FLAGS (skill-level)
   --help          Show this help message without making any changes
+  --dry-run       Preview which .pseudo files would be created or
+                  overwritten, without writing anything
 
 FLAGS (underlying pseudocodify CLI, passed through)
   --output        Where results go (default ./pseudocode/)
