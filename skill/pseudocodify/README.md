@@ -4,6 +4,13 @@ Coding-agent skill that wraps the [`pseudocodify`](https://github.com/keithmacka
 
 ## Installation
 
+### From the mackayi marketplace (recommended)
+
+```
+/plugin marketplace add keithmackay/mackayi
+/plugin install pseudocodify@mackayi
+```
+
 ### Claude Code
 
 ```bash
