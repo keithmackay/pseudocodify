@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-20
+
 - Add `--dry-run` flag: previews which `.pseudo` files would be created or overwritten without writing anything
 - Document mackayi marketplace installation in README
 - Add --version flag support, reporting installed version and a best-effort GitHub update check
