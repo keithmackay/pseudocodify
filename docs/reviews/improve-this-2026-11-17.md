@@ -13,8 +13,13 @@
 
 **How this run was carried out:**
 - The run was non-interactive (assigned by Snugban), so the Step 3 category confirmation was skipped. The categories above are the full proposed set, and the task brief fixed the scope ahead of time.
-- The skill's rubric files (`references/skill-rubric.md`, `references/readme-rubric.md`, `references/agent-instructions-rubric.md`) could not be read in this session because file access was denied. README Quality, Skill Effectiveness and Agent Instructions were therefore judged against the general criteria in the skill body, not the detailed rubrics. A rerun with rubric access may surface more findings in those three categories.
-- The test suite could not be run because `pytest` is not installed in the available interpreter (Python 3.15). Code findings come from tracing the code by hand, not from running it. Each one cites the lines that support it.
+- **The test suite was run.** Command: `uv run --with pytest --with pytest-cov --with-editable . python -m pytest -q --cov=pseudocodify --cov-report=term-missing` on Python 3.15.2, with the project installed from `pyproject.toml`. Result: **66 passed in 0.61s**, no warnings, **91% line coverage** (363 statements, 32 missed). The per-module results are under Test Coverage & Quality (#36).
+- **The main correctness findings were reproduced.** A probe script ran the real `run_analysis` → `run_generation` pipeline, and the real CLI through Typer's `CliRunner`, with a fake LLM adapter that returns fixed responses and can simulate an API error. The probe lived in the gitignored `.venv/` and is not part of the repository. Findings it confirmed are marked **Reproduced**, with the observed output.
+- **The rubric files could not be read, and this is a limit of the execution environment.** The skill's Step 4 points to `references/skill-rubric.md`, `references/readme-rubric.md` and `references/agent-instructions-rubric.md` in the skill's folder. That folder resolves to `/Users/keith.mackay/Projects/improve-this/skills/improve-this/references/`. This session's sandbox only allows file access inside the repository worktree, and both routes were refused:
+  - The Read tool returned "Claude requested permissions to read from …/references/skill-rubric.md, but you haven't granted it yet". The session is non-interactive, so nobody could grant the request.
+  - `cat` returned "cat in '/Users/keith.mackay/Projects/improve-this/skills/improve-this/references/readme-rubric.md' was blocked. For security, Claude Code may only concatenate files from the allowed working directories for this session".
+
+  These were retried in a second round, after review feedback, with the same result. README Quality, Skill Effectiveness and Agent Instructions were therefore judged against the criteria stated in the skill body (accuracy of claims against the code, completeness, progressive disclosure, internal consistency), not the detailed rubrics. To get the full rubric-based evaluation, rerun this review with the improve-this skill directory added to the session's allowed directories. That rerun may add findings in those three categories. It would not change the code and test findings.
 
 ---
 
@@ -37,7 +42,8 @@
 #14 [Impact: Medium | Confidence: High]   Accuracy & Consistency: CHANGELOG 1.1.0 lists skill-only flags as if they were CLI features
 #15 [Impact: Medium | Confidence: High]   Correctness: analysis retries cover only JSON errors, so schema/validation errors fail on the first attempt
 #16 [Impact: Medium | Confidence: High]   Agent Instructions: CLAUDE.md bans mocks in E2E tests, but the CLI "end-to-end" test mocks the adapter
-#17 [Impact: Medium | Confidence: High]   Accuracy & Consistency: "source may be a file" is advertised but not supported
+#17 [Impact: Medium | Confidence: High]   Accuracy & Consistency: "source may be a file" is advertised, but a file source crashes (NotADirectoryError)
+#36 [Impact: Medium | Confidence: High]   Test Coverage: 91% line coverage, but the interactive menu, failure paths and cross-phase runs are untested
 #18 [Impact: Medium | Confidence: High]   Clarity: ABOUTME header rule violated by 16 of 18 Python files
 #19 [Impact: Medium | Confidence: Medium] README Quality: root README omits the agent skill, the cache directory, cost/privacy notes and sample output
 #20 [Impact: Medium | Confidence: Medium] Token Efficiency & Progressive Disclosure: --version and --dry-run procedures sit in the always-loaded SKILL.md
@@ -66,14 +72,17 @@
 
 **#1 Incremental mode never regenerates modified files** (Impact: High | Confidence: High)
 - Evidence: `pseudocodify/analyzer.py:183-187` re-analyzes a changed file and stores the *current* hash (`data["source_hash"] = source_hash`, `analyzer.py:125`). `pseudocodify/generator.py:159-163` then decides whether to skip by comparing `hash_file(source_path) == fa.source_hash`. Those two values are now always equal, so if the old `.pseudo` exists the check `if not style_changed and pseudo_path.exists() and source_unchanged:` skips the file.
+- **Reproduced:** run 1 translated `app.py` as `TRANSLATION v1`. After editing `app.py`, run 2 re-analyzed it, but `app.pseudo` still ended with `'TRANSLATION v1'`, and the summary printed `Run complete: 1/1 files translated successfully.`
 - Why: the generator's hash check compares the source with the analysis that was just recomputed. It never compares the source with the version the existing `.pseudo` was generated from. After the first run, editing a source file updates `analysis.json`, but the stale pseudocode is kept and reported as success. "Incremental by default" is the headline feature (`README.md:12`, `SKILL.md:106`), and in a normal workflow it silently produces wrong output. Only a style change or deleting the output forces regeneration.
 
 **#2 `.pseudocodify.toml` is effectively ignored** (Impact: High | Confidence: High)
 - Evidence: `pseudocodify/cli.py:39-43` builds `cli_overrides` from every Typer parameter, including untouched defaults (`"output": output`, `"style": style`, `"model": model`, `"include": include or []`, …). `pseudocodify/config.py:38` applies each override `if value is not None`. No default is `None`, so every TOML key is overwritten.
+- **Reproduced:** with a TOML file setting `style = "pascal"` and `model = "toml-model"`, running `pseudocodify <dir> --yes` through the CLI produced an effective config of `{'style': 'auto', 'model': 'claude-opus-4-6'}`.
 - Why: `README.md:73` ("Place a `.pseudocodify.toml` … to set run defaults") and `SKILL.md:102` describe a feature that does nothing when the tool runs from the CLI. `tests/test_config.py:26-30` only tests `load_config` with a hand-built overrides dict, so the bug in how the CLI wires it up isn't covered.
 
 **#3 A generation-phase LLM error crashes the whole run** (Impact: High | Confidence: High)
 - Evidence: `pseudocodify/generator.py:102`: `result = adapter.run(prompt, context=style.SYSTEM_PROMPT)` has no try/except, and `RLMAdapter.run` raises `RLMError` (`rlm_adapter.py:27`). `generator.py:180` `success = future.result()` re-raises in the main thread. `cli.py:70` `architecture_summary = adapter.run(summary_prompt)` is also unguarded.
+- **Reproduced:** with two analyzed files and an adapter that raises `RLMError("simulated 529 overloaded")` during generation, `run_generation` raised the exception, with `README.pseudo.md written: False`.
 - Why: one transient API error (rate limit, timeout) aborts the run. No README index is written, no state is saved, and you get a traceback instead of the `[TRANSLATION INCOMPLETE]` marker. The design spec says failures should be handled per file (`docs/superpowers/specs/2026-04-17-pseudocodify-design.md:288`: "Warning logged with file path; remaining files continue"). The analyzer phase does catch these errors (`analyzer.py:134`), so the two phases behave inconsistently.
 
 **#9 Failed translations are never retried and are counted as successes** (Impact: Medium | Confidence: High)
@@ -82,14 +91,17 @@
 
 **#10 `--consolidate` scatters intermediate `.pseudo` files next to the output file** (Impact: Medium | Confidence: High)
 - Evidence: `generator.py:151`: `pseudo_dir = output.parent if cfg.consolidate else output`. With the documented `--output all.pseudo.md` (`README.md:49`), `output.parent` is the current directory, so a per-file `.pseudo` tree mirroring the source is written into CWD.
+- **Reproduced:** `--output all.pseudo.md --consolidate`, run from an empty directory, left `['all.pseudo.md', 'app.pseudo']` in that directory.
 - Why: you get unexpected files mixed into your working directory (possibly the source tree itself), and none of this is documented.
 
 **#11 Output path collisions** (Impact: Medium | Confidence: High)
 - Evidence: `generator.py:107`, `:157` and `:46` all derive the output name with `rel_path.rsplit(".", 1)[0] + ".pseudo"`.
+- **Reproduced:** sources `['util.js', 'util.py']` produced outputs `['README.pseudo.md', 'util.pseudo']`, so one translation was lost, while the summary printed `Run complete: 2/2 files translated successfully.`
 - Why: `util.py` and `util.js`, or `foo.c` and `foo.h` (`.h` isn't recognized today, but `foo.ts` and `foo.js` are), map to the same `foo.pseudo`. The concurrent writers race and one translation silently overwrites the other. The README index then lists two entries pointing to the same file. This is common in mixed TS/JS or C/C++ repos.
 
 **#15 Analysis retries only cover JSON decode errors** (Impact: Medium | Confidence: High)
 - Evidence: `analyzer.py:127-136`. `json.JSONDecodeError` gets a corrective retry. Every other exception, including pydantic `ValidationError` (e.g. the model emits `"kind": "interface"` or omits `purpose`), hits `except Exception`, which prints a warning and returns `None` on the first attempt.
+- **Reproduced:** an analysis response of `{"purpose": "missing fields"}` (valid JSON, missing required fields) failed with `4 validation errors for FileAnalysis` on the first attempt. No corrective retry was made.
 - Why: schema-violating but valid JSON is the most likely LLM failure once the prompt says "JSON only", and it is the case where a corrective retry would help most. The CHANGELOG claim "after 3 retries" (`CHANGELOG.md:28`) doesn't hold for it. `tests/test_analyzer.py:165-176` asserts that non-JSON errors do not retry, which is reasonable for `RLMError`, but it also locks in this behaviour for validation errors.
 
 **#26 The "pascal" style can never be auto-recommended** (Impact: Low | Confidence: High)
@@ -105,6 +117,14 @@
 **#4 The "regenerates changed file" test exercises an unreachable state** (Impact: High | Confidence: High)
 - Evidence: `tests/test_generator.py:384`: `source_hash="stale_hash"`. In the real pipeline, `run_analysis` always refreshes `source_hash` before `run_generation` runs (see #1), so a `FileAnalysis` with a stale hash never reaches the generator.
 - Why: the test passes while the behaviour it claims to protect ("Files whose source hash differs from the cached hash must be re-generated", `test_generator.py:366`) is broken end to end. No test runs analysis then generation twice with a source edit in between.
+
+**#36 High line coverage, but key paths are untested** (Impact: Medium | Confidence: High)
+- Evidence: observed coverage run (66 passed, 91% total):
+  - `analyzer.py` 97%, missing `168, 199, 204-205`: the analysis-failure reporting path and the `_recommend_style` fallback.
+  - `generator.py` 95%, missing `96, 184, 187, 213-215`: failed-translation accounting in `run_generation` and the "Files with issues" summary.
+  - `cli.py` 65%, missing `53, 63, 86-107`: the whole interactive style menu, plus the `--verbose` banners.
+  - `config.py`, `models.py`, `rlm_adapter.py` and `styles/*` 100%.
+- Why: the suite is fast and green, but it tests each unit in isolation with hand-built `FileAnalysis` objects. Every bug reproduced above (#1, #2, #3, #6, #10, #11, #17) lies in how the units are wired together, and the suite never runs analysis and generation together across two runs. The interactive menu is the main user-facing decision point, and its input validation loop (`cli.py:97-107`) has no test.
 
 **#33 Tautological or weak assertions** (Impact: Low | Confidence: Medium)
 - Evidence: `tests/test_rlm_adapter.py:45`, `assert not issubclass(RLMError, BaseException) or issubclass(RLMError, Exception)`, is always true. `tests/test_cli.py:13` accepts the style name appearing anywhere in output *or* the exception string. `tests/test_styles.py:16` checks `len(style.SYSTEM_PROMPT) > 50`.
@@ -132,6 +152,7 @@
 
 **#29 Duplicate failure warnings** (Impact: Low | Confidence: High)
 - Evidence: `analyzer.py:135` prints `WARNING: [ANALYSIS FAILED] {rel_path} — {e}` inside `analyze_file`, and `analyzer.py:204-205` prints `WARNING: [ANALYSIS FAILED] {f}` again for the same file.
+- **Reproduced:** one failed file produced both `WARNING: [ANALYSIS FAILED] bad.py — 4 validation errors …` and `WARNING: [ANALYSIS FAILED] bad.py`.
 - Why: noisy stderr that makes failure counts look doubled.
 
 ### Code Efficiency / Token Efficiency & Scalability
@@ -158,6 +179,7 @@
 
 **#6 "Failures are never silently dropped" is false for analysis failures** (Impact: High | Confidence: High)
 - Evidence: `README.md:14` says "failed translations are flagged with `[TRANSLATION INCOMPLETE]`, never silently dropped". `SKILL.md:108` says "Failed translations are never silently dropped". But a file that fails *analysis* is left out of `result_files` (`analyzer.py:198-199`). It gets no `.pseudo`, no marker, no README index entry, and it isn't counted in the `n_ok/total` summary, because `total = len(cm.files)` (`generator.py:207`).
+- **Reproduced:** with `ok.py` and a `bad.py` whose analysis fails, the output directory held only `['README.pseudo.md', 'ok.pseudo']`. Nothing in the output mentioned `bad`, and the summary printed `Run complete: 1/1 files translated successfully.`
 - Why: the only trace is a stderr line. The skill tells agents to judge success by grepping output for `[TRANSLATION INCOMPLETE]` (`SKILL.md:113`), so agents will report a run as complete when files are missing.
 
 **#8 Large-codebase / context-window fallback claims are not implemented** (Impact: High | Confidence: Medium)
@@ -180,10 +202,11 @@
 
 **#17 "Source may be a file" is advertised but unsupported** (Impact: Medium | Confidence: High)
 - Evidence: `cli.py:17` `help="Source directory or file"`, `SKILL.md:91` "the directory or file to convert", `help.md:21` "Convert a specific directory/file". But `discover_files` calls `source.rglob("*")` (`analyzer.py:42`), which yields nothing for a file. The TOML lookup becomes `<file>/.pseudocodify.toml` (`cli.py:38`).
-- Why: a single-file run quietly processes zero files, prints "Done." and still makes one LLM call for the architecture summary.
+- **Reproduced (worse than the code reading suggested):** `run_analysis(RunConfig(source="<dir>/app.py"))` crashed with `NotADirectoryError: [Errno 20] Not a directory: '…/app.py/.pseudocodify'` (`analyzer.py:64`, which tries to create the cache directory inside the file path).
+- Why: the CLI, skill and help text all advertise single-file input, and it crashes with a traceback.
 
 **#27 Stale counts and unnecessary dependencies in contributor docs** (Impact: Low | Confidence: High)
-- Evidence: `CONTRIBUTING.md:28` says "Ensure all 49 tests pass", but there are 66 test functions across `tests/`. `README.md:90` and `CONTRIBUTING.md:17` install `pytest-mock`, but no test uses the `mocker` fixture (all tests use `unittest.mock`). `CONTRIBUTING.md:21` mentions "tests that make real LLM calls", and none exist.
+- Evidence: `CONTRIBUTING.md:28` says "Ensure all 49 tests pass", but pytest collects and passes 66 tests. `README.md:90` and `CONTRIBUTING.md:17` install `pytest-mock`, but no test uses the `mocker` fixture (all tests use `unittest.mock`). `CONTRIBUTING.md:21` mentions "tests that make real LLM calls", and none exist.
 - Why: small inaccuracies that make the docs look unmaintained.
 
 **#32 `--verbose` promises per-file progress** (Impact: Low | Confidence: Medium)
