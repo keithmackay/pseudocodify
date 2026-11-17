@@ -182,6 +182,8 @@ test/
 
 ## Test Coverage Requirements
 
+Percentages below are line coverage [CONFIRM: line coverage, not branch coverage].
+
 ### Critical Paths (100% Coverage Required)
 - Data persistence (all repository operations)
 - Streak calculations
@@ -216,14 +218,14 @@ flutter test --coverage
 
 ### E2E Tests (Playwright)
 ```bash
-# Start app in test mode
+# Start app in debug mode
 flutter run -d chrome --web-port=8080
 
 # In another terminal, run Playwright tests
 npx playwright test
 
-# Run specific test
-npx playwright test e2e/habit_creation_flow_test.ts
+# Run specific test [CONFIRM: path relative to repo root, matching the test/e2e/ directory above]
+npx playwright test test/e2e/habit_creation_flow_test.ts
 
 # Run in headed mode (see browser)
 npx playwright test --headed
@@ -244,8 +246,7 @@ npx playwright test --headed
 - Keep test data minimal but representative
 
 ### Mock Repositories
-- Use mock repositories for widget tests
-- Avoid network calls and real database operations in widget tests
+- Use mock repositories for widget tests, so widget tests make no network calls and no real database operations
 - Example: `MockPeepRepository`, `MockHabitRepository`
 
 ---
@@ -263,9 +264,9 @@ npx playwright test --headed
 ### Anti-Patterns to Avoid
 
 ❌ **Testing implementation details**: Test behavior, not internal structure
-❌ **Brittle tests**: Don't break from minor UI changes
+❌ **Brittle tests**: Write tests that survive minor UI changes
 ❌ **Slow tests**: Keep unit tests under 100ms, widget tests under 1s
-❌ **Flaky tests**: No random timeouts or race conditions
+❌ **Flaky tests**: Wait on explicit conditions (e.g. `await page.waitForSelector('text=...')`) instead of random timeouts, and remove race conditions
 ❌ **Testing mocked behavior**: Test real logic, not mock returns
 
 ---
