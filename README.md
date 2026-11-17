@@ -55,22 +55,38 @@ pseudocodify ./my-project --style cormen
 pseudocodify ./my-project --yes
 ```
 
+The positional `SOURCE` argument is the directory to translate and defaults to `.`.
+
 Available flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--output` | `./pseudocode/` | Output file (consolidate mode) or directory (per-file mode) |
+| `--output`, `-o` | `./pseudocode/` | Output file (consolidate mode) or directory (per-file mode) |
 | `--consolidate` | `false` | Merge all output into a single document |
 | `--style` | `auto` | `auto`, `cormen`, `structured-english`, or `pascal` |
 | `--model` | `claude-opus-4-6` | Claude model to use |
-| `--include` | recognized extensions | Glob patterns for files to include |
-| `--exclude` | none | Glob patterns for files to skip |
+| `--include` | recognized extensions | Glob patterns for files to include (repeatable) |
+| `--exclude` | none | Glob patterns for files to skip (repeatable) |
 | `--yes` | `false` | Skip interactive style confirmation |
 | `--verbose` | `false` | Show per-file progress |
 
+With `--style auto`, `pseudocodify` detects the codebase's dominant paradigm (OOP, functional, procedural, or mixed), recommends a style, and lets you accept it or pick another from a menu. It skips the prompt and uses the recommendation when you pass `--yes` or when stdin is not a terminal.
+
+### Output
+
+In per-file mode, each source file gets a `.pseudo` file at the same relative path under the output directory, with its extension replaced (`src/cli.py` → `pseudocode/src/cli.pseudo`). A `README.pseudo.md` index with an architecture summary and file list is written at the output root.
+
+In consolidate mode, the index and every translated file are merged into the single `--output` file. The per-file `.pseudo` files are still written, alongside that file.
+
+Run state (the cached `CodebaseMap` and the last-used style) is stored in a `.pseudocodify/` directory inside the source directory. You'll likely want to add it to that project's `.gitignore`. Changing the style forces every file to be regenerated.
+
+Files that fail structure extraction after 3 retries are reported as `[ANALYSIS FAILED]` on stderr. Files that fail translation after 3 retries get a `.pseudo` file containing only the header and a `[TRANSLATION INCOMPLETE]` marker, are left out of consolidated output, and are listed in the end-of-run summary.
+
+Only files with a recognized source extension are processed: `.py`, `.js`, `.ts`, `.go`, `.rb`, `.java`, `.cs`, `.cpp`, `.c`, `.rs`, `.php`, `.swift`, `.kt`, `.scala`, `.r`, `.m`, `.sh`, `.bash`, `.pl`, `.lua`. `--include` narrows that set; it can't add other extensions.
+
 ## Configuration
 
-Place a `.pseudocodify.toml` at your project root to set run defaults. CLI flags always take precedence.
+Place a `.pseudocodify.toml` in the source directory to set run defaults. Any field from the flags table is accepted, and CLI flags take precedence.
 
 ```toml
 [pseudocodify]
@@ -81,19 +97,41 @@ model = "claude-opus-4-6"
 output = "./pseudocode"
 ```
 
+> [!NOTE]
+> See [Limitations](#limitations): when run from the CLI, values in this file are overridden by the CLI's own defaults.
+
+## Coding-Agent Skill
+
+The [`skill/pseudocodify/`](skill/pseudocodify/) directory contains a skill that wraps this CLI for Claude Code, Codex, Antigravity, and Gemini CLI. It checks prerequisites, runs `pseudocodify` with sensible flags, and reports any `[TRANSLATION INCOMPLETE]` files. It also supports `--help`, `--version`, and a `--dry-run` preview of which `.pseudo` files a run would create or overwrite.
+
+Install it from the mackayi marketplace in Claude Code:
+
+```text
+/plugin marketplace add keithmackay/mackayi
+/plugin install pseudocodify@mackayi
+```
+
+See [skill/pseudocodify/README.md](skill/pseudocodify/README.md) for per-platform installation instructions.
+
+## Limitations
+
+- **Config file values are overridden by CLI defaults** — the CLI passes every option (including unset ones at their default values) as an override, so settings in `.pseudocodify.toml` never take effect when you run `pseudocodify` from the command line. Pass the options as flags instead.
+- **Same-name files collide** — output paths drop the source extension, so `utils.py` and `utils.ts` in the same directory both map to `utils.pseudo`, and one overwrites the other.
+- **Fixed language list** — files outside the recognized extensions listed under [Output](#output) are skipped silently.
+
 ## Development
 
 ```bash
 git clone https://github.com/keithmackay/pseudocodify
 cd pseudocodify
 pip install -e .
-pip install pytest pytest-mock
+pip install pytest
 pytest tests/ -v
 ```
 
 ## Contributing
 
-Contributions are welcome. Fork the repo, create a branch, and open a pull request. Please ensure all tests pass before submitting.
+Contributions are welcome. Fork the repo, create a branch, and open a pull request. Please ensure all tests pass before submitting. See [CONTRIBUTING.md](CONTRIBUTING.md) for bug-report, feature-request, and code-style guidance.
 
 ## Changelog
 
@@ -101,4 +139,4 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Keith MacKay
