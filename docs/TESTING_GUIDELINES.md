@@ -42,7 +42,7 @@ HabitPeeps follows a comprehensive testing strategy with multiple layers:
 
 ### 3. End-to-End Tests (Full Flows)
 **What**: Test complete user workflows across the entire application.
-**Tools**: **Playwright** (preferred) or manual testing
+**Tools**: **Playwright** (preferred) or manual testing; use Playwright in every case listed under [When to Use Playwright](#when-to-use-playwright)
 **Coverage Target**: All critical user paths
 
 **Examples**:

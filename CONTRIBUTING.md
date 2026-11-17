@@ -26,11 +26,11 @@ pytest tests/ -v
 2. Write a failing test before implementing anything new
 3. Make the smallest change that makes the test pass
 4. Ensure the full test suite passes with no failures: `pytest tests/ -v`
-5. Open a PR against `main` with a clear description of what changed and why
+5. Open a PR against `main` with a clear description of what changed and why, filling in every section of the PR template (`.github/pull_request_template.md`)
 
 ## Code Style
 
 - Match the formatting of the file you're editing
-- All new source files must begin with two `# ABOUTME:` comment lines describing what the file does
+- All new source files must begin with two `# ABOUTME:` comment lines describing what the file does, so every file's purpose can be found with `grep ABOUTME`
 - Add only what the current task needs — no speculative features
 - Comments explain *what* or *why*, not *how it's better than before*

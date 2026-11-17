@@ -36,6 +36,8 @@ Only pause to ask for confirmation when:
 - Your partner specifically asks "how should I approach X?" (answer the question, don't jump to
   implementation)
 
+"Just do it" never overrides "STOP and ask for clarification rather than making assumptions": if doing the task would mean assuming something about what's being asked, ask first.
+
 ## Designing software
 
 - YAGNI. The best code is no code. Build only the features we need right now.
@@ -61,7 +63,7 @@ Only pause to ask for confirmation when:
 - YOU MUST get Keith's explicit approval before implementing ANY backward compatibility.
 - YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
 - Leave whitespace that does not affect execution or output as it is. To change formatting, run a formatting tool; YOU MUST NOT make those whitespace changes by hand.
-- Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+- Fix broken things immediately when you find them. Don't ask permission to fix bugs. If what you find is unrelated to your current task, the journal rule in "Learning and Memory Management" takes priority: record it in your journal instead of fixing it now.
 
 
 
