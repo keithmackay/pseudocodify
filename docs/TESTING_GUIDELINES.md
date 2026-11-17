@@ -182,8 +182,6 @@ test/
 
 ## Test Coverage Requirements
 
-Percentages below are line coverage [CONFIRM: line coverage, not branch coverage].
-
 ### Critical Paths (100% Coverage Required)
 - Data persistence (all repository operations)
 - Streak calculations
@@ -224,8 +222,8 @@ flutter run -d chrome --web-port=8080
 # In another terminal, run Playwright tests
 npx playwright test
 
-# Run specific test [CONFIRM: path relative to repo root, matching the test/e2e/ directory above]
-npx playwright test test/e2e/habit_creation_flow_test.ts
+# Run specific test
+npx playwright test e2e/habit_creation_flow_test.ts
 
 # Run in headed mode (see browser)
 npx playwright test --headed
