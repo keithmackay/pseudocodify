@@ -42,7 +42,7 @@ HabitPeeps follows a comprehensive testing strategy with multiple layers:
 
 ### 3. End-to-End Tests (Full Flows)
 **What**: Test complete user workflows across the entire application.
-**Tools**: **Playwright** (preferred) or manual testing
+**Tools**: **Playwright** (preferred) or manual testing; use Playwright in every case listed under [When to Use Playwright](#when-to-use-playwright)
 **Coverage Target**: All critical user paths
 
 **Examples**:
@@ -216,7 +216,7 @@ flutter test --coverage
 
 ### E2E Tests (Playwright)
 ```bash
-# Start app in test mode
+# Start app in debug mode
 flutter run -d chrome --web-port=8080
 
 # In another terminal, run Playwright tests
@@ -244,8 +244,7 @@ npx playwright test --headed
 - Keep test data minimal but representative
 
 ### Mock Repositories
-- Use mock repositories for widget tests
-- Avoid network calls and real database operations in widget tests
+- Use mock repositories for widget tests, so widget tests make no network calls and no real database operations
 - Example: `MockPeepRepository`, `MockHabitRepository`
 
 ---
@@ -263,9 +262,9 @@ npx playwright test --headed
 ### Anti-Patterns to Avoid
 
 ❌ **Testing implementation details**: Test behavior, not internal structure
-❌ **Brittle tests**: Don't break from minor UI changes
+❌ **Brittle tests**: Write tests that survive minor UI changes
 ❌ **Slow tests**: Keep unit tests under 100ms, widget tests under 1s
-❌ **Flaky tests**: No random timeouts or race conditions
+❌ **Flaky tests**: Wait on explicit conditions (e.g. `await page.waitForSelector('text=...')`) instead of random timeouts, and remove race conditions
 ❌ **Testing mocked behavior**: Test real logic, not mock returns
 
 ---
